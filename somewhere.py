@@ -2,70 +2,42 @@ import datetime as dt
 import pytz
 import random
 
-
-
 def get_utc_now():
 	utc_now = pytz.utc.localize(dt.datetime.utcnow())
 	# adapted from https://howchoo.com/g/ywi5m2vkodk/working-with-datetime-objects-and-timezones-in-python
 
 	return utc_now
 
-def hrs_to_5pm(utc_now):
-	utc_h = utc_now.hour
-	if (utc_h<3):
-		d=17-utc_h-24
-	else:
-		d=17-utc_h
-	return d
-
-def mins_past_5pm(now):
-	m = now.minute
-	return m
-
-def possible_timezones(hrs_to_5pm,common_only=True):
-
-	# adapted from https://stackoverflow.com/questions/46036998/pytz-timezone-from-utc-offset
-	# pick one of the timezone collections
-	timezones = pytz.common_timezones
-
-	desired_delta = dt.timedelta(hours=hrs_to_5pm)
-
-	null_delta = dt.timedelta(0, 0)
-	results = []
+def get_fiveoclock_place(utc_now,common_only=True):
+	timezones=pytz.common_timezones
+	candidates = []
+	minutes = []
 
 	for tz_name in timezones:
-		tz = pytz.timezone(tz_name)
-		non_dst_offset = getattr(tz, '_transition_info', [[null_delta]])[-1]
-		if desired_delta == non_dst_offset[0]:
-			results.append(tz_name)
+	    tz = pytz.timezone(tz_name)
+	    loc_now = utc_now.astimezone(pytz.timezone(tz_name))
+	    if loc_now.hour == 17 and tz_name not in ["GMT","UTC"]:
+	        candidates.append(tz_name)
+	        minutes.append(loc_now.minute)
 
-	return results
-
-def best_candidate(candidates,utc_now):
-	minutes = []
-	i=0
-	best_i= 0
-	rand_flag=0
-	while i < len(candidates):
-		c = candidates[i]
-		pst_now = utc_now.astimezone(pytz.timezone(c))
-		m = mins_past_5pm(pst_now)
-		minutes.append(m)
-		if m==minutes[best_i]:
-			best_i=i
-			rand_flag=1
-		elif m<minutes[best_i]:
-			best_i=i
-		i+=1
-
-	if rand_flag==1:
-		best_i = random.randint(0,best_i)
-
-	return candidates[best_i],minutes[best_i]
+	if len(candidates) == 0:
+		best_minute = 0
+		winner = "Margaritaville"
+	else:
+		best_minute = min(minutes)
+		winners = []
+		i = 0
+		while i < len(candidates):
+		    if minutes[i] == best_minute:
+		        winners.append(candidates[i])
+		    i+=1
+		winner = random.choice(winners)
+	return winner, best_minute
 
 def strip_location(locationa):
 	locationb = locationa.replace("_"," ")
 	occurrences = locationb.count("/")
+	preposition = "in "
 
 	if occurrences == 2:
 		s1 = locationb.find("/")
@@ -83,6 +55,7 @@ def strip_location(locationa):
 			else: occurrences=0
 		s = locationb.find("/")
 		locationc = locationb[s+1:]
+		country = locationb[:s]
 
 	if locationc in ["Eastern","Central","Pacific","Mountain","Atlantic"]:
 		s = locationb.find("/")
@@ -91,34 +64,55 @@ def strip_location(locationa):
 
 	if locationc in ["Easter"]:
 		locationc  = locationc + " Island"
+		preposition = "on "
 
 	if locationc in ["Canary"]:
 		locationc  = "the " + locationc + " Islands"
 
-	return locationc
+	if locationc[:4] in ["Isle"]:
+		preposition = "on the "
 
+	if locationc[:3] in ["St "]:
+		locationc = "St. " + locationc[3:]
+
+	if locationb[:10] in ["Antarctica"]: # case for Antarctic research stations ["Casey","Casey","Davis","DumontDUrville","Macquarie","Mawson","McMurdo","Palmer","Rothera","Syowa","Troll","Vostok"]:
+		preposition = "at the "
+		if locationc in ["DumontDUrville"]:
+			locationc = "Dumont d'Urville Research Station, Antarctica"
+		elif locationc in ["Macquarie"]:
+			locationc = "Macquarie Island Research Station, Antarctica"
+		else:
+			locationc = locationc + " Research Station, Antarctica"
+
+	stringl = preposition + locationc
+
+	return stringl
+
+def create_fiveoclock_string(minutes):
+	if minutes ==0:
+		stringa = "It's 5 o'clock "
+	elif minutes == 1:
+		##print("It's",minutes,"minute past 5 in",location)
+		stringa = "It's " + str(minutes) + " minute past 5 "
+	elif minutes >1:
+		stringa = "It's " + str(minutes) + " minutes past 5 "
+
+	return stringa
 
 def somewhere():
 
 	utc_now = get_utc_now()
-	candidates = possible_timezones(hrs_to_5pm(utc_now),common_only=True)
-	location,minutes=best_candidate(candidates,utc_now)
+	location,minutes = get_fiveoclock_place(utc_now,common_only=True)
 	location = strip_location(location)
-
-	if minutes ==0:
-		stringa = "It's 5 o'clock in "
-	elif minutes == 1:
-		##print("It's",minutes,"minute past 5 in",location)
-		stringa = "It's " + str(minutes) + " minute past 5 in "
-	else:
-		stringa = "It's " + str(minutes) + " minutes past 5 in "
-
+	stringa = create_fiveoclock_string(minutes)
 	stringb = "Pour something tall and strong!"
+	stringm = str('{:02d}'.format(minutes))
 
-	return stringa,stringb,(str('{:02d}'.format(minutes))),location
+	return stringa,stringb,stringm,location
 
 def main():
-	stringa,stringb,minutes,location = somewhere()
+	stringa,stringb,stringm,location = somewhere()
+	print("5:" + stringm + "pm")
 	print(stringa + location + ".")
 	print(stringb)
 
